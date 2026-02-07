@@ -1,17 +1,22 @@
 /*
- * Sensor Board - Step 1: Byte-level connectivity
+ * Sensor Board - Step 2: Higher-rate TX for ring buffer stress test
  *
- * Sends "HELLO\n" every ~1s via UART2.
- * Flashes GREEN LED on each send cycle.
+ * Sends "HELLO\n" every ~100ms via UART2 (10x faster than Step 1).
+ * Flashes GREEN LED briefly on each send cycle.
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
  *
- * Validates: wiring, UART init, baud rate.
+ * Validates: control board ISR + ring buffer handles sustained load.
  */
 
 #include "MKL25Z4.h"
 #include "../common/pin_config.h"
 #include "../common/uart.h"
 #include "../common/debug_uart.h"
+
+/* ---- Globals needed by uart.h (TX-only, but extern symbols must exist) ---- */
+
+ringbuf_t           rx_ring;
+volatile uint32_t   rx_overflow_count;
 
 /* ---- Simple delay using SysTick ---- */
 
@@ -29,10 +34,32 @@ static void delay_ms(uint32_t ms)
         ;
 }
 
+/* ---- Decimal print helper ---- */
+
+static void debug_putdec(uint32_t n)
+{
+    char tmp[10];
+    int  i = 0;
+
+    if (n == 0) {
+        debug_putchar('0');
+        return;
+    }
+    while (n > 0) {
+        tmp[i++] = '0' + (char)(n % 10);
+        n /= 10;
+    }
+    while (i > 0) {
+        debug_putchar(tmp[--i]);
+    }
+}
+
 /* ---- Main ---- */
 
 int main(void)
 {
+    uint32_t send_count = 0;
+
     /* Core clock = 20.97 MHz, SysTick fires every 1 ms */
     SystemCoreClockUpdate();
     SysTick_Config(SystemCoreClock / 1000u);
@@ -43,20 +70,26 @@ int main(void)
 
     RGB_ALL_OFF();
 
-    PRINTF("[SENSOR] Booted. Sending HELLO every 1s.\r\n");
+    PRINTF("[SENSOR] Step 2: Sending HELLO every 100ms.\r\n");
 
     while (1) {
         /* Send message */
         uart2_puts("HELLO\n");
+        send_count++;
 
-        PRINTF("[SENSOR] Sent: HELLO\\n\r\n");
-
-        /* Flash green LED to show "sent" */
+        /* Brief green flash to show "sent" */
         RGB_GREEN_ON();
-        delay_ms(500);
+        delay_ms(10);
         RGB_GREEN_OFF();
 
-        /* Wait between sends */
-        delay_ms(500);
+        /* Log every 50 messages (~5 seconds) */
+        if ((send_count % 50) == 0) {
+            PRINTF("[SENSOR] sent=");
+            debug_putdec(send_count);
+            PRINTF("\r\n");
+        }
+
+        /* Wait for next send cycle (100ms total period) */
+        delay_ms(90);
     }
 }
