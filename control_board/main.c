@@ -4,6 +4,7 @@
  * Receives bytes from UART2, matches against "HELLO\n".
  * On successful match  -> flash GREEN LED  (same as sender)
  * On mismatch / error  -> flash RED LED
+ * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
  *
  * Validates: wiring, UART init, baud rate.
  */
@@ -11,6 +12,7 @@
 #include "MKL25Z4.h"
 #include "../common/pin_config.h"
 #include "../common/uart.h"
+#include "../common/debug_uart.h"
 
 /* ---- Simple delay using SysTick ---- */
 
@@ -71,14 +73,14 @@ static int match_byte(uint8_t c)
 static void flash_green(void)
 {
     RGB_GREEN_ON();
-    delay_ms(30);
+    delay_ms(500);
     RGB_GREEN_OFF();
 }
 
 static void flash_red(void)
 {
     RGB_RED_ON();
-    delay_ms(30);
+    delay_ms(500);
     RGB_RED_OFF();
 }
 
@@ -91,17 +93,29 @@ int main(void)
 
     pin_config_init();
     uart2_init();
+    debug_uart_init();
 
     RGB_ALL_OFF();
     idx = 0;
 
+    PRINTF("[CONTROL] Booted. Waiting for HELLO messages.\r\n");
+
     while (1) {
         uint8_t c;
         if (uart2_getchar(&c)) {
+            /* Print every received byte for debugging */
+            PRINTF("[RX] 0x");
+            debug_puthex(c);
+            PRINTF(" '");
+            debug_print_byte(c);
+            PRINTF("'\r\n");
+
             int result = match_byte(c);
             if (result == 1) {
+                PRINTF("[CONTROL] >>> MATCH: HELLO received! <<<\r\n");
                 flash_green();    /* Match! Same color as sender */
             } else if (result == -1) {
+                PRINTF("[CONTROL] MISMATCH - reset\r\n");
                 flash_red();      /* Mismatch: signal error */
             }
             /* result == 0: still accumulating, no LED action */
