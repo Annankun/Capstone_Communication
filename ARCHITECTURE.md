@@ -84,6 +84,26 @@ control_board/
   main.c
 ```
 
+## Pin Assignments (FRDM-KL25Z)
+
+### Onboard RGB LED (active-low)
+
+| Signal | Port/Pin | Function  |
+|--------|----------|-----------|
+| Red    | PTB18    | GPIO      |
+| Green  | PTB19    | GPIO      |
+| Blue   | PTD1     | GPIO      |
+
+### UART2 Serial (board-to-board)
+
+| Signal | Port/Pin | ALT Mux |
+|--------|----------|---------|
+| TX     | PTD3     | ALT3    |
+| RX     | PTD2     | ALT3    |
+
+- Baud rate: 9600
+- Configuration defined in `common/pin_config.h`
+
 ## Key Principles
 
 1. Only one message type (snapshot) until stable
