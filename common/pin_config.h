@@ -40,6 +40,11 @@
 #define IR_OBS_GPIO     GPIOB
 #define IR_OBS_PIN      2       /* PTB2 - digital input from VOUT */
 
+/* ---- Emergency Stop Button (active-low, external pull-up or internal) ---- */
+#define ESTOP_BTN_PORT  PORTB
+#define ESTOP_BTN_GPIO  GPIOB
+#define ESTOP_BTN_PIN   3       /* PTB3 - GPIO input, press = LOW */
+
 /*
  * Pin init helper — call once from main() before using UART or RGB.
  */
@@ -66,6 +71,10 @@ static inline void pin_config_init(void)
     IR_OBS_PORT->PCR[IR_OBS_PIN] = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
     IR_OBS_GPIO->PDDR &= ~(1u << IR_OBS_PIN);  /* input */
 
+    /* --- Emergency stop button: GPIO input with pull-up --- */
+    ESTOP_BTN_PORT->PCR[ESTOP_BTN_PIN] = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    ESTOP_BTN_GPIO->PDDR &= ~(1u << ESTOP_BTN_PIN);  /* input */
+
     /* --- UART2 pins: ALT3 mux --- */
     COMM_TX_PORT->PCR[COMM_TX_PIN] = PORT_PCR_MUX(COMM_UART_ALT);
     COMM_RX_PORT->PCR[COMM_RX_PIN] = PORT_PCR_MUX(COMM_UART_ALT);
@@ -81,6 +90,9 @@ static inline void pin_config_init(void)
 #define RGB_GREEN_OFF()  (RGB_GREEN_GPIO->PSOR = (1u << RGB_GREEN_PIN))
 #define RGB_BLUE_ON()    (RGB_BLUE_GPIO->PCOR  = (1u << RGB_BLUE_PIN))
 #define RGB_BLUE_OFF()   (RGB_BLUE_GPIO->PSOR  = (1u << RGB_BLUE_PIN))
+
+/* ---- Emergency stop button read (returns 0 = pressed, 1 = released) ---- */
+#define ESTOP_BTN_READ() (((ESTOP_BTN_GPIO->PDIR) >> ESTOP_BTN_PIN) & 1u)
 
 /* ---- IR sensor read (returns 0 = obstacle, 1 = clear) ----
  * Hardware note: MH-sensor LM393 module outputs LOW when obstacle

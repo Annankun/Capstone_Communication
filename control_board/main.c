@@ -1,9 +1,14 @@
 /*
- * Control Board - Step 4: Real snapshot payload
+ * Control Board - Step 4: Real snapshot payload + Emergency Stop
  *
  * UART2 RX interrupt pushes bytes into a ring buffer.
  * Main loop drains ring buffer into parser, unpacks validated frames
  * into a snapshot_t struct containing real sensor data.
+ *
+ * Emergency stop (ESTOP) frame from sensor board:
+ *   - payload[0] = 1: enter emergency stop (halt all activity)
+ *   - payload[0] = 0: resume normal operation
+ *   - Blue LED steady = emergency stop active
  *
  * Tracks:
  *   - good_frames:  valid frames with correct CRC
@@ -13,7 +18,7 @@
  * LED feedback:
  *   - Green flash:  valid frame received
  *   - Red (steady): obstacle detected by IR sensor
- *   - Blue:         safe mode (no valid frame for 500ms)
+ *   - Blue:         safe mode (timeout) or emergency stop
  *
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
  */
@@ -94,6 +99,7 @@ int main(void)
     uint8_t  expected_seq  = 0;
     uint8_t  first_frame   = 1;   /* flag: haven't received any frame yet */
     uint8_t  in_safe_mode  = 0;
+    uint8_t  in_estop      = 0;   /* emergency stop from sensor board */
 
     snapshot_t latest_snapshot;
     latest_snapshot.ir_obstacle = 1;  /* default: clear (no obstacle) */
@@ -136,22 +142,40 @@ int main(void)
                     expected_seq = parser.seq + 1;
                 }
 
-                /* Unpack snapshot if payload size matches */
-                if (parser.len == SNAPSHOT_SIZE) {
+                /* Handle emergency stop frame */
+                if (parser.type == FRAME_TYPE_ESTOP && parser.len >= 1) {
+                    if (parser.payload[0]) {
+                        in_estop = 1;
+                        RGB_ALL_OFF();
+                        RGB_BLUE_ON();
+                        PRINTF("[CONTROL] *** EMERGENCY STOP ACTIVATED ***\r\n");
+                    } else {
+                        in_estop = 0;
+                        RGB_BLUE_OFF();
+                        PRINTF("[CONTROL] *** EMERGENCY STOP RELEASED ***\r\n");
+                    }
+                }
+
+                /* Unpack snapshot if sensor frame with correct size */
+                if (parser.type == FRAME_TYPE_SENSOR &&
+                    parser.len == SNAPSHOT_SIZE) {
                     snapshot_unpack(&latest_snapshot, parser.payload);
                 }
 
                 /* Exit safe mode if we were in it */
                 if (in_safe_mode) {
                     in_safe_mode = 0;
-                    RGB_BLUE_OFF();
+                    if (!in_estop)
+                        RGB_BLUE_OFF();
                 }
 
-                /* Show obstacle status on red LED */
-                if (latest_snapshot.ir_obstacle == 0) {
-                    RGB_RED_ON();    /* obstacle detected */
-                } else {
-                    RGB_RED_OFF();   /* path clear */
+                /* Show obstacle status on red LED (not during estop) */
+                if (!in_estop) {
+                    if (latest_snapshot.ir_obstacle == 0) {
+                        RGB_RED_ON();    /* obstacle detected */
+                    } else {
+                        RGB_RED_OFF();   /* path clear */
+                    }
                 }
 
                 /* Brief green flash for valid frame */
@@ -164,8 +188,8 @@ int main(void)
         /* Turn off green after drain (non-blocking visual feedback) */
         RGB_GREEN_OFF();
 
-        /* Heartbeat: 500ms without valid frame = safe mode */
-        if (!first_frame && !in_safe_mode &&
+        /* Heartbeat: 500ms without valid frame = safe mode (skip if estop) */
+        if (!first_frame && !in_safe_mode && !in_estop &&
             (ms_ticks - last_valid_rx) >= 500u) {
             in_safe_mode = 1;
             RGB_BLUE_ON();
@@ -189,6 +213,8 @@ int main(void)
             debug_putdec(rx_overflow_count);
             PRINTF(" hw_overrun=");
             debug_putdec(hw_overrun_count);
+            PRINTF(" estop=");
+            debug_putdec(in_estop);
             PRINTF("\r\n");
         }
     }
