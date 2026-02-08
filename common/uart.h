@@ -14,7 +14,7 @@
  * Bus clock assumed ~20.97 MHz (default FEI mode on FRDM-KL25Z).
  */
 
-#define BUS_CLOCK_HZ  20971520u   /* Default FEI bus clock */
+#define BUS_CLOCK_HZ  10485760u   /* Default FEI bus clock */
 
 /* RX ring buffer - shared between ISR and main loop */
 extern ringbuf_t  rx_ring;
