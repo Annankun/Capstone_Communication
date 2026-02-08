@@ -17,6 +17,7 @@
 
 ringbuf_t           rx_ring;
 volatile uint32_t   rx_overflow_count;
+volatile uint32_t   hw_overrun_count;
 
 /* ---- UART2 RX ISR ---- */
 
@@ -34,6 +35,7 @@ void UART2_IRQHandler(void)
     /* Clear overrun flag if set (must read S1 then D, already done above) */
     if (status & UART_S1_OR_MASK) {
         (void)COMM_UART->D;          /* clear OR flag */
+        hw_overrun_count++;
     }
 }
 
@@ -169,6 +171,8 @@ int main(void)
             debug_putdec(mismatch_count);
             PRINTF(" overflow=");
             debug_putdec(rx_overflow_count);
+            PRINTF(" hw_overrun=");
+            debug_putdec(hw_overrun_count);
             PRINTF(" ring_pending=");
             debug_putdec(ring_count(&rx_ring));
             PRINTF("\r\n");
