@@ -99,6 +99,17 @@ control_board/
 | Green  | PTB19    | GPIO      |
 | Blue   | PTD1     | GPIO      |
 
+### IR Obstacle Sensor (MH-sensor, LM393)
+
+| Signal | Port/Pin | Function       |
+|--------|----------|----------------|
+| VOUT   | PTB2     | GPIO input     |
+| VCC    | 3.3V     | Power          |
+| GND    | GND      | Ground         |
+
+- Output: LOW = obstacle detected, HIGH = path clear
+- Digital output via LM393 comparator (no ADC needed)
+
 ### UART2 Serial (board-to-board)
 
 | Signal | Port/Pin | ALT Mux |

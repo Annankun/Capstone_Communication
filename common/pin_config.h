@@ -35,6 +35,11 @@
 
 #define COMM_BAUD_RATE  9600
 
+/* ---- IR Obstacle Sensor (MH-sensor, LM393, digital out) ---- */
+#define IR_OBS_PORT     PORTB
+#define IR_OBS_GPIO     GPIOB
+#define IR_OBS_PIN      2       /* PTB2 - digital input from VOUT */
+
 /*
  * Pin init helper — call once from main() before using UART or RGB.
  */
@@ -57,6 +62,10 @@ static inline void pin_config_init(void)
     RGB_GREEN_GPIO->PSOR = (1u << RGB_GREEN_PIN);
     RGB_BLUE_GPIO->PSOR  = (1u << RGB_BLUE_PIN);
 
+    /* --- IR obstacle sensor: GPIO input with pull-up --- */
+    IR_OBS_PORT->PCR[IR_OBS_PIN] = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    IR_OBS_GPIO->PDDR &= ~(1u << IR_OBS_PIN);  /* input */
+
     /* --- UART2 pins: ALT3 mux --- */
     COMM_TX_PORT->PCR[COMM_TX_PIN] = PORT_PCR_MUX(COMM_UART_ALT);
     COMM_RX_PORT->PCR[COMM_RX_PIN] = PORT_PCR_MUX(COMM_UART_ALT);
@@ -72,6 +81,9 @@ static inline void pin_config_init(void)
 #define RGB_GREEN_OFF()  (RGB_GREEN_GPIO->PSOR = (1u << RGB_GREEN_PIN))
 #define RGB_BLUE_ON()    (RGB_BLUE_GPIO->PCOR  = (1u << RGB_BLUE_PIN))
 #define RGB_BLUE_OFF()   (RGB_BLUE_GPIO->PSOR  = (1u << RGB_BLUE_PIN))
+
+/* ---- IR sensor read (returns 0 = obstacle, 1 = clear) ---- */
+#define IR_OBS_READ()  (((IR_OBS_GPIO->PDIR) >> IR_OBS_PIN) & 1u)
 
 #define RGB_ALL_OFF() do { \
     RGB_RED_OFF(); RGB_GREEN_OFF(); RGB_BLUE_OFF(); \

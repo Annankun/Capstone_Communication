@@ -1,15 +1,17 @@
 /*
- * Sensor Board - Step 3: Frame + parser (dummy payload)
+ * Sensor Board - Step 4: Real snapshot payload
  *
- * Sends framed packets every ~100ms via UART2 with:
- *   - 4-byte dummy payload (0xDE, 0xAD, 0xBE, 0xEF)
- *   - Incrementing sequence number (0-255, wraps)
- *   - CRC16 for integrity checking
+ * Reads the MH Infrared Obstacle Sensor (LM393) on PTB2 every 100ms,
+ * packs the reading into a snapshot struct, frames it with CRC16,
+ * and transmits via UART2 to the control board.
+ *
+ * IR sensor output:
+ *   LOW  (0) = obstacle detected
+ *   HIGH (1) = path clear
  *
  * Green LED flash on each send cycle.
+ * Red LED on when obstacle detected (visual feedback on sensor board).
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
- *
- * Validates: control board can parse framed packets and verify CRC.
  */
 
 #include "MKL25Z4.h"
@@ -18,6 +20,7 @@
 #include "debug_uart.h"
 #include "ringbuf.h"
 #include "protocol.h"
+#include "sensor_sample.h"
 
 /* ---- Globals needed by uart.h (TX-only, but extern symbols must exist) ---- */
 
@@ -60,27 +63,19 @@ static void debug_putdec(uint32_t n)
     }
 }
 
-/* ---- Send one raw byte via UART2 ---- */
-
-static void uart2_sendbyte(uint8_t b)
-{
-    uart2_putchar(b);
-}
-
 /* ---- Main ---- */
 
 int main(void)
 {
-    uint32_t send_count = 0;
-    uint8_t  seq = 0;
+    uint32_t   send_count = 0;
+    uint8_t    seq = 0;
+    snapshot_t snap;
 
-    /* Dummy payload: fixed 4 bytes */
-    static const uint8_t dummy_payload[4] = { 0xDE, 0xAD, 0xBE, 0xEF };
+    /* Frame buffer: HEADER(5) + SNAPSHOT(2) + CRC(2) = 9 bytes */
+    uint8_t frame_buf[FRAME_HEADER_SIZE + SNAPSHOT_SIZE + FRAME_CRC_SIZE];
+    uint8_t payload[SNAPSHOT_SIZE];
 
-    /* Frame buffer: max = HEADER(5) + PAYLOAD(4) + CRC(2) = 11 bytes */
-    uint8_t frame_buf[FRAME_HEADER_SIZE + 4 + FRAME_CRC_SIZE];
-
-    /* Core clock = 20.97 MHz, SysTick fires every 1 ms */
+    /* Core clock, SysTick fires every 1 ms */
     SystemCoreClockUpdate();
     SysTick_Config(SystemCoreClock / 1000u);
 
@@ -90,16 +85,27 @@ int main(void)
 
     RGB_ALL_OFF();
 
-    PRINTF("[SENSOR] Step 3: Sending framed packets every 100ms.\r\n");
+    PRINTF("[SENSOR] Step 4: IR obstacle sensor on PTB2. Sending every 100ms.\r\n");
 
     while (1) {
-        /* Pack frame */
+        /* Sample the IR sensor */
+        snapshot_sample(&snap);
+
+        /* Visual feedback: red LED = obstacle detected */
+        if (snap.ir_obstacle == 0) {
+            RGB_RED_ON();
+        } else {
+            RGB_RED_OFF();
+        }
+
+        /* Serialize and pack into frame */
+        snapshot_pack(&snap, payload);
         uint8_t frame_len = frame_pack(frame_buf, FRAME_TYPE_SENSOR, seq,
-                                        dummy_payload, sizeof(dummy_payload));
+                                        payload, SNAPSHOT_SIZE);
 
         /* Transmit frame byte by byte */
         for (uint8_t i = 0; i < frame_len; i++)
-            uart2_sendbyte(frame_buf[i]);
+            uart2_putchar(frame_buf[i]);
 
         seq++;
         send_count++;
@@ -111,10 +117,12 @@ int main(void)
 
         /* Log every 50 frames (~5 seconds) */
         if ((send_count % 50) == 0) {
-            PRINTF("[SENSOR] frames_sent=");
+            PRINTF("[SENSOR] frames=");
             debug_putdec(send_count);
             PRINTF(" seq=");
             debug_putdec(seq);
+            PRINTF(" ir=");
+            debug_putdec(snap.ir_obstacle);
             PRINTF("\r\n");
         }
 

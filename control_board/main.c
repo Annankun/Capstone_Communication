@@ -1,16 +1,19 @@
 /*
- * Control Board - Step 3: Frame + parser (dummy payload)
+ * Control Board - Step 4: Real snapshot payload
  *
  * UART2 RX interrupt pushes bytes into a ring buffer.
- * Main loop drains ring buffer immediately into a non-blocking parser
- * state machine that validates SOF, extracts payload, and checks CRC.
+ * Main loop drains ring buffer into parser, unpacks validated frames
+ * into a snapshot_t struct containing real sensor data.
  *
  * Tracks:
  *   - good_frames:  valid frames with correct CRC
  *   - bad_crc:      frames with CRC mismatch
  *   - seq_errors:   out-of-order or lost sequence numbers
  *
- * Heartbeat: if no valid frame for 500ms, enters safe mode (blue LED).
+ * LED feedback:
+ *   - Green flash:  valid frame received
+ *   - Red (steady): obstacle detected by IR sensor
+ *   - Blue:         safe mode (no valid frame for 500ms)
  *
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
  */
@@ -21,6 +24,7 @@
 #include "debug_uart.h"
 #include "ringbuf.h"
 #include "protocol.h"
+#include "sensor_sample.h"
 
 /* ---- Global ring buffer and overflow counter (used by uart.h) ---- */
 
@@ -91,6 +95,10 @@ int main(void)
     uint8_t  first_frame   = 1;   /* flag: haven't received any frame yet */
     uint8_t  in_safe_mode  = 0;
 
+    snapshot_t latest_snapshot;
+    latest_snapshot.ir_obstacle = 1;  /* default: clear (no obstacle) */
+    latest_snapshot.reserved    = 0;
+
     parser_t parser;
 
     SystemCoreClockUpdate();
@@ -103,7 +111,7 @@ int main(void)
     RGB_ALL_OFF();
     parser_init(&parser);
 
-    PRINTF("[CONTROL] Step 3: Frame parser active. Waiting.\r\n");
+    PRINTF("[CONTROL] Step 4: Receiving real sensor snapshots.\r\n");
 
     while (1) {
         uint8_t c;
@@ -128,30 +136,40 @@ int main(void)
                     expected_seq = parser.seq + 1;
                 }
 
+                /* Unpack snapshot if payload size matches */
+                if (parser.len == SNAPSHOT_SIZE) {
+                    snapshot_unpack(&latest_snapshot, parser.payload);
+                }
+
                 /* Exit safe mode if we were in it */
                 if (in_safe_mode) {
                     in_safe_mode = 0;
                     RGB_BLUE_OFF();
                 }
 
+                /* Show obstacle status on red LED */
+                if (latest_snapshot.ir_obstacle == 0) {
+                    RGB_RED_ON();    /* obstacle detected */
+                } else {
+                    RGB_RED_OFF();   /* path clear */
+                }
+
                 /* Brief green flash for valid frame */
                 RGB_GREEN_ON();
             } else if (result == PARSE_BAD_CRC) {
                 bad_crc++;
-                /* Brief red flash for bad CRC */
-                RGB_RED_ON();
             }
         }
 
-        /* Turn off LEDs after drain (non-blocking visual feedback) */
+        /* Turn off green after drain (non-blocking visual feedback) */
         RGB_GREEN_OFF();
-        RGB_RED_OFF();
 
         /* Heartbeat: 500ms without valid frame = safe mode */
         if (!first_frame && !in_safe_mode &&
             (ms_ticks - last_valid_rx) >= 500u) {
             in_safe_mode = 1;
             RGB_BLUE_ON();
+            RGB_RED_OFF();
             PRINTF("[CONTROL] SAFE MODE: no valid frame for 500ms!\r\n");
         }
 
@@ -165,8 +183,8 @@ int main(void)
             debug_putdec(bad_crc);
             PRINTF(" seq_err=");
             debug_putdec(seq_errors);
-            PRINTF(" rx_bytes=");
-            debug_putdec(rx_byte_count);
+            PRINTF(" ir=");
+            debug_putdec(latest_snapshot.ir_obstacle);
             PRINTF(" overflow=");
             debug_putdec(rx_overflow_count);
             PRINTF(" hw_overrun=");
