@@ -22,6 +22,7 @@
 #define FRAME_CRC_SIZE      2u
 #define FRAME_MAX_PAYLOAD   255u
 #define FRAME_TYPE_SENSOR   0x01u
+#define FRAME_TYPE_ESTOP    0x02u   /* Emergency stop: payload[0] = 1 stop, 0 resume */
 
 /* ---- CRC16-CCITT (polynomial 0x1021, init 0xFFFF) ---- */
 
