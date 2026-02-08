@@ -5,9 +5,11 @@
  * Main loop drains ring buffer into parser, unpacks validated frames
  * into a snapshot_t struct containing real sensor data.
  *
- * Emergency stop (ESTOP) frame from sensor board:
- *   - payload[0] = 1: enter emergency stop (halt all activity)
- *   - payload[0] = 0: resume normal operation
+ * Emergency stop sources:
+ *   1. ESTOP frame from sensor board (payload[0] = 1/0)
+ *   2. Local PTB3 button on control board (toggle on press)
+ *      - Press once:  enter estop (stop all activity, ignore data)
+ *      - Press again: resume normal operation
  *   - Blue LED steady = emergency stop active
  *
  * Tracks:
@@ -99,7 +101,12 @@ int main(void)
     uint8_t  expected_seq  = 0;
     uint8_t  first_frame   = 1;   /* flag: haven't received any frame yet */
     uint8_t  in_safe_mode  = 0;
-    uint8_t  in_estop      = 0;   /* emergency stop from sensor board */
+    uint8_t  in_estop      = 0;   /* emergency stop active */
+
+    /* Local button (PTB3) debounce state */
+    uint8_t  btn_last      = 1;   /* last stable reading (1 = released) */
+    uint32_t btn_debounce  = 0;   /* timestamp of last edge */
+    #define  BTN_DEBOUNCE_MS 50u
 
     snapshot_t latest_snapshot;
     latest_snapshot.ir_obstacle = 1;  /* default: clear (no obstacle) */
@@ -122,6 +129,38 @@ int main(void)
     while (1) {
         uint8_t c;
 
+        /* ---- Local ESTOP button (PTB3) - toggle on press ---- */
+        {
+            uint8_t btn_now = ESTOP_BTN_READ();
+            if (btn_now != btn_last &&
+                (ms_ticks - btn_debounce) >= BTN_DEBOUNCE_MS) {
+                btn_debounce = ms_ticks;
+                btn_last = btn_now;
+
+                if (btn_now == 0) {          /* falling edge = press */
+                    in_estop = !in_estop;    /* toggle */
+                    if (in_estop) {
+                        RGB_ALL_OFF();
+                        RGB_BLUE_ON();
+                        PRINTF("[CONTROL] *** ESTOP (button) ACTIVATED ***\r\n");
+                    } else {
+                        RGB_BLUE_OFF();
+                        PRINTF("[CONTROL] *** ESTOP (button) RELEASED ***\r\n");
+                    }
+                }
+            }
+        }
+
+        /* While in estop, flush incoming bytes but don't process frames */
+        if (in_estop) {
+            while (uart2_getchar(&c)) {
+                /* discard */
+            }
+            parser_init(&parser);  /* reset parser so we start clean on resume */
+            RGB_GREEN_OFF();
+            continue;
+        }
+
         /* Drain ring buffer immediately into parser - no delays */
         while (uart2_getchar(&c)) {
             rx_byte_count++;
@@ -142,17 +181,17 @@ int main(void)
                     expected_seq = parser.seq + 1;
                 }
 
-                /* Handle emergency stop frame */
+                /* Handle emergency stop frame from sensor board */
                 if (parser.type == FRAME_TYPE_ESTOP && parser.len >= 1) {
                     if (parser.payload[0]) {
                         in_estop = 1;
                         RGB_ALL_OFF();
                         RGB_BLUE_ON();
-                        PRINTF("[CONTROL] *** EMERGENCY STOP ACTIVATED ***\r\n");
+                        PRINTF("[CONTROL] *** ESTOP (remote) ACTIVATED ***\r\n");
                     } else {
                         in_estop = 0;
                         RGB_BLUE_OFF();
-                        PRINTF("[CONTROL] *** EMERGENCY STOP RELEASED ***\r\n");
+                        PRINTF("[CONTROL] *** ESTOP (remote) RELEASED ***\r\n");
                     }
                 }
 
