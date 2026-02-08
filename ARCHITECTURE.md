@@ -51,6 +51,11 @@
 - RX ISR pushes bytes into `rx_ring`
 - Main loop pops and counts
 - **Validates**: no byte loss under load
+- **Verification**: run 10 min, then check in IDE Watch window:
+  - `rx_overflow_count == 0` (ring buffer never full)
+  - `hw_overrun_count == 0` (UART hardware never overrun)
+  - `mismatch_count == 0` (no garbled bytes)
+  - `match_count ≈ seconds × 10` (message rate correct)
 
 ### Step 3: Frame + parser (dummy payload)
 - Sensor sends framed packets (4-byte dummy payload, SEQ incrementing)
