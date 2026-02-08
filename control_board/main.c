@@ -12,6 +12,7 @@
 #include "pin_config.h"
 #include "uart.h"
 #include "debug_uart.h"
+#include "ringbuf.h"
 
 /* ---- Global ring buffer and overflow counter (used by uart.h) ---- */
 
