@@ -82,8 +82,12 @@ static inline void pin_config_init(void)
 #define RGB_BLUE_ON()    (RGB_BLUE_GPIO->PCOR  = (1u << RGB_BLUE_PIN))
 #define RGB_BLUE_OFF()   (RGB_BLUE_GPIO->PSOR  = (1u << RGB_BLUE_PIN))
 
-/* ---- IR sensor read (returns 0 = obstacle, 1 = clear) ---- */
-#define IR_OBS_READ()  (((IR_OBS_GPIO->PDIR) >> IR_OBS_PIN) & 1u)
+/* ---- IR sensor read (returns 0 = obstacle, 1 = clear) ----
+ * Hardware note: MH-sensor LM393 module outputs HIGH when obstacle
+ * is detected (active-high), so we invert to keep the convention
+ * 0 = obstacle, 1 = clear throughout the protocol.
+ */
+#define IR_OBS_READ()  (~((IR_OBS_GPIO->PDIR) >> IR_OBS_PIN) & 1u)
 
 #define RGB_ALL_OFF() do { \
     RGB_RED_OFF(); RGB_GREEN_OFF(); RGB_BLUE_OFF(); \
