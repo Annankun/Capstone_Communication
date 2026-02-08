@@ -9,9 +9,9 @@
  */
 
 #include "MKL25Z4.h"
-#include "../common/pin_config.h"
-#include "../common/uart.h"
-#include "../common/debug_uart.h"
+#include "pin_config.h"
+#include "uart.h"
+#include "debug_uart.h"
 
 /* ---- Globals needed by uart.h (TX-only, but extern symbols must exist) ---- */
 
