@@ -1,11 +1,15 @@
 /*
- * Sensor Board - Step 2: Higher-rate TX for ring buffer stress test
+ * Sensor Board - Step 3: Frame + parser (dummy payload)
  *
- * Sends "HELLO\n" every ~100ms via UART2 (10x faster than Step 1).
- * Flashes GREEN LED briefly on each send cycle.
+ * Sends framed packets every ~100ms via UART2 with:
+ *   - 4-byte dummy payload (0xDE, 0xAD, 0xBE, 0xEF)
+ *   - Incrementing sequence number (0-255, wraps)
+ *   - CRC16 for integrity checking
+ *
+ * Green LED flash on each send cycle.
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
  *
- * Validates: control board ISR + ring buffer handles sustained load.
+ * Validates: control board can parse framed packets and verify CRC.
  */
 
 #include "MKL25Z4.h"
@@ -13,6 +17,7 @@
 #include "uart.h"
 #include "debug_uart.h"
 #include "ringbuf.h"
+#include "protocol.h"
 
 /* ---- Globals needed by uart.h (TX-only, but extern symbols must exist) ---- */
 
@@ -55,11 +60,25 @@ static void debug_putdec(uint32_t n)
     }
 }
 
+/* ---- Send one raw byte via UART2 ---- */
+
+static void uart2_sendbyte(uint8_t b)
+{
+    uart2_putchar(b);
+}
+
 /* ---- Main ---- */
 
 int main(void)
 {
     uint32_t send_count = 0;
+    uint8_t  seq = 0;
+
+    /* Dummy payload: fixed 4 bytes */
+    static const uint8_t dummy_payload[4] = { 0xDE, 0xAD, 0xBE, 0xEF };
+
+    /* Frame buffer: max = HEADER(5) + PAYLOAD(4) + CRC(2) = 11 bytes */
+    uint8_t frame_buf[FRAME_HEADER_SIZE + 4 + FRAME_CRC_SIZE];
 
     /* Core clock = 20.97 MHz, SysTick fires every 1 ms */
     SystemCoreClockUpdate();
@@ -71,11 +90,18 @@ int main(void)
 
     RGB_ALL_OFF();
 
-    PRINTF("[SENSOR] Step 2: Sending HELLO every 100ms.\r\n");
+    PRINTF("[SENSOR] Step 3: Sending framed packets every 100ms.\r\n");
 
     while (1) {
-        /* Send message */
-        uart2_puts("HELLO\n");
+        /* Pack frame */
+        uint8_t frame_len = frame_pack(frame_buf, FRAME_TYPE_SENSOR, seq,
+                                        dummy_payload, sizeof(dummy_payload));
+
+        /* Transmit frame byte by byte */
+        for (uint8_t i = 0; i < frame_len; i++)
+            uart2_sendbyte(frame_buf[i]);
+
+        seq++;
         send_count++;
 
         /* Brief green flash to show "sent" */
@@ -83,10 +109,12 @@ int main(void)
         delay_ms(10);
         RGB_GREEN_OFF();
 
-        /* Log every 50 messages (~5 seconds) */
+        /* Log every 50 frames (~5 seconds) */
         if ((send_count % 50) == 0) {
-            PRINTF("[SENSOR] sent=");
+            PRINTF("[SENSOR] frames_sent=");
             debug_putdec(send_count);
+            PRINTF(" seq=");
+            debug_putdec(seq);
             PRINTF("\r\n");
         }
 
