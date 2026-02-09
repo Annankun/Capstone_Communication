@@ -158,74 +158,73 @@ int main(void)
             }
             parser_init(&parser);  /* reset parser so we start clean on resume */
             RGB_GREEN_OFF();
-            continue;
-        }
+        } else {
+            /* Drain ring buffer immediately into parser - no delays */
+            while (uart2_getchar(&c)) {
+                rx_byte_count++;
 
-        /* Drain ring buffer immediately into parser - no delays */
-        while (uart2_getchar(&c)) {
-            rx_byte_count++;
+                int result = parser_feed(&parser, c);
 
-            int result = parser_feed(&parser, c);
+                if (result == PARSE_OK) {
+                    good_frames++;
+                    last_valid_rx = ms_ticks;
 
-            if (result == PARSE_OK) {
-                good_frames++;
-                last_valid_rx = ms_ticks;
-
-                /* Sequence check */
-                if (first_frame) {
-                    expected_seq = parser.seq + 1;
-                    first_frame = 0;
-                } else {
-                    if (parser.seq != expected_seq)
-                        seq_errors++;
-                    expected_seq = parser.seq + 1;
-                }
-
-                /* Handle emergency stop frame from sensor board */
-                if (parser.type == FRAME_TYPE_ESTOP && parser.len >= 1) {
-                    if (parser.payload[0]) {
-                        in_estop = 1;
-                        RGB_ALL_OFF();
-                        RGB_BLUE_ON();
-                        PRINTF("[CONTROL] *** ESTOP (remote) ACTIVATED ***\r\n");
+                    /* Sequence check */
+                    if (first_frame) {
+                        expected_seq = parser.seq + 1;
+                        first_frame = 0;
                     } else {
-                        in_estop = 0;
-                        RGB_BLUE_OFF();
-                        PRINTF("[CONTROL] *** ESTOP (remote) RELEASED ***\r\n");
+                        if (parser.seq != expected_seq)
+                            seq_errors++;
+                        expected_seq = parser.seq + 1;
                     }
-                }
 
-                /* Unpack snapshot if sensor frame with correct size */
-                if (parser.type == FRAME_TYPE_SENSOR &&
-                    parser.len == SNAPSHOT_SIZE) {
-                    snapshot_unpack(&latest_snapshot, parser.payload);
-                }
-
-                /* Exit safe mode if we were in it */
-                if (in_safe_mode) {
-                    in_safe_mode = 0;
-                    if (!in_estop)
-                        RGB_BLUE_OFF();
-                }
-
-                /* Show obstacle status on red LED (not during estop) */
-                if (!in_estop) {
-                    if (latest_snapshot.ir_obstacle == 0) {
-                        RGB_RED_ON();    /* obstacle detected */
-                    } else {
-                        RGB_RED_OFF();   /* path clear */
+                    /* Handle emergency stop frame from sensor board */
+                    if (parser.type == FRAME_TYPE_ESTOP && parser.len >= 1) {
+                        if (parser.payload[0]) {
+                            in_estop = 1;
+                            RGB_ALL_OFF();
+                            RGB_BLUE_ON();
+                            PRINTF("[CONTROL] *** ESTOP (remote) ACTIVATED ***\r\n");
+                        } else {
+                            in_estop = 0;
+                            RGB_BLUE_OFF();
+                            PRINTF("[CONTROL] *** ESTOP (remote) RELEASED ***\r\n");
+                        }
                     }
-                }
 
-                /* Brief green flash for valid frame */
-                RGB_GREEN_ON();
-            } else if (result == PARSE_BAD_CRC) {
-                bad_crc++;
+                    /* Unpack snapshot if sensor frame with correct size */
+                    if (parser.type == FRAME_TYPE_SENSOR &&
+                        parser.len == SNAPSHOT_SIZE) {
+                        snapshot_unpack(&latest_snapshot, parser.payload);
+                    }
+
+                    /* Exit safe mode if we were in it */
+                    if (in_safe_mode) {
+                        in_safe_mode = 0;
+                        if (!in_estop)
+                            RGB_BLUE_OFF();
+                    }
+
+                    /* Show obstacle status on red LED (not during estop) */
+                    if (!in_estop) {
+                        if (latest_snapshot.ir_obstacle == 0) {
+                            RGB_RED_ON();    /* obstacle detected */
+                        } else {
+                            RGB_RED_OFF();   /* path clear */
+                        }
+                    }
+
+                    /* Brief green flash for valid frame */
+                    RGB_GREEN_ON();
+                } else if (result == PARSE_BAD_CRC) {
+                    bad_crc++;
+                }
             }
-        }
 
-        /* Turn off green after drain (non-blocking visual feedback) */
-        RGB_GREEN_OFF();
+            /* Turn off green after drain (non-blocking visual feedback) */
+            RGB_GREEN_OFF();
+        }
 
         /* Heartbeat: 500ms without valid frame = safe mode (skip if estop) */
         if (!first_frame && !in_safe_mode && !in_estop &&
