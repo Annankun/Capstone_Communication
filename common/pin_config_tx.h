@@ -4,32 +4,59 @@
 /*
  * TX (Sensor Board) Pin Configuration - FRDM-KL25Z
  *
- * Pins specific to the sensor / transmitter board.
+ * 6x MH Infrared Obstacle Sensors (LM393, digital out).
  * Include pin_config.h first for shared definitions.
+ *
+ * Sensor index   Pin     Port/GPIO
+ * -----------   -----   ----------
+ *     0         PTE3    PORTE / GPIOE
+ *     1         PTE2    PORTE / GPIOE
+ *     2         PTB11   PORTB / GPIOB
+ *     3         PTB10   PORTB / GPIOB
+ *     4         PTB9    PORTB / GPIOB
+ *     5         PTB8    PORTB / GPIOB
+ *
+ * All sensors: active-low output (0 = obstacle, 1 = clear).
  */
 
 #include "pin_config.h"
 
-/* ---- IR Obstacle Sensor (MH-sensor, LM393, digital out) ---- */
-#define IR_OBS_PORT     PORTB
-#define IR_OBS_GPIO     GPIOB
-#define IR_OBS_PIN      2       /* PTB2 - digital input from VOUT */
-
-/* ---- IR sensor read (returns 0 = obstacle, 1 = clear) ----
- * Hardware note: MH-sensor LM393 module outputs LOW when obstacle
- * is detected (active-low), which already matches the convention
- * 0 = obstacle, 1 = clear — no inversion needed.
- */
-#define IR_OBS_READ()  (((IR_OBS_GPIO->PDIR) >> IR_OBS_PIN) & 1u)
-
 /*
  * TX-specific pin init — call after pin_config_init().
+ * Configures all 6 obstacle sensor pins as GPIO input with pull-up.
  */
 static inline void pin_config_tx_init(void)
 {
-    /* IR obstacle sensor: GPIO input with pull-up */
-    IR_OBS_PORT->PCR[IR_OBS_PIN] = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
-    IR_OBS_GPIO->PDDR &= ~(1u << IR_OBS_PIN);  /* input */
+    /* PTE3, PTE2: GPIO input with pull-up */
+    PORTE->PCR[3]  = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    PORTE->PCR[2]  = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    GPIOE->PDDR   &= ~((1u << 3) | (1u << 2));
+
+    /* PTB11, PTB10, PTB9, PTB8: GPIO input with pull-up */
+    PORTB->PCR[11] = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    PORTB->PCR[10] = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    PORTB->PCR[9]  = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    PORTB->PCR[8]  = PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+    GPIOB->PDDR   &= ~((1u << 11) | (1u << 10) | (1u << 9) | (1u << 8));
+}
+
+/*
+ * Read all 6 obstacle sensors in one shot (polling).
+ * Reads PDIR once per port to get a consistent snapshot.
+ *
+ * obs[0..5]: 0 = obstacle detected, 1 = clear.
+ */
+static inline void ir_obs_read_all(uint8_t obs[6])
+{
+    uint32_t pdir_e = GPIOE->PDIR;
+    uint32_t pdir_b = GPIOB->PDIR;
+
+    obs[0] = (uint8_t)((pdir_e >> 3)  & 1u);   /* PTE3  */
+    obs[1] = (uint8_t)((pdir_e >> 2)  & 1u);   /* PTE2  */
+    obs[2] = (uint8_t)((pdir_b >> 11) & 1u);   /* PTB11 */
+    obs[3] = (uint8_t)((pdir_b >> 10) & 1u);   /* PTB10 */
+    obs[4] = (uint8_t)((pdir_b >> 9)  & 1u);   /* PTB9  */
+    obs[5] = (uint8_t)((pdir_b >> 8)  & 1u);   /* PTB8  */
 }
 
 #endif /* PIN_CONFIG_TX_H */

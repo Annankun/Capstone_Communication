@@ -1,16 +1,20 @@
 /*
- * Sensor Board - Step 4: Real snapshot payload
+ * Sensor Board - Step 5: 6x IR Obstacle Sensors
  *
- * Reads the MH Infrared Obstacle Sensor (LM393) on PTB2 every 100ms,
- * packs the reading into a snapshot struct, frames it with CRC16,
+ * Reads 6 MH Infrared Obstacle Sensors (LM393) every 100ms,
+ * packs the readings into a snapshot struct, frames with CRC16,
  * and transmits via UART2 to the control board.
+ *
+ * Sensor pins (all polled via GPIO PDIR):
+ *   [0] PTE3   [1] PTE2   [2] PTB11
+ *   [3] PTB10  [4] PTB9   [5] PTB8
  *
  * IR sensor output:
  *   LOW  (0) = obstacle detected
  *   HIGH (1) = path clear
  *
  * Green LED flash on each send cycle.
- * Red LED on when obstacle detected (visual feedback on sensor board).
+ * Red LED on when any obstacle detected (visual feedback on sensor board).
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
  */
 
@@ -106,15 +110,15 @@ int main(void)
         delay_ms(150);
     }
 
-    PRINTF("[SENSOR] Step 4: IR sensor transmit.\r\n");
+    PRINTF("[SENSOR] Step 5: 6x IR obstacle sensors.\r\n");
     PRINTF("[SENSOR] UART2 TX on PTD3, RX on PTD2, 9600 baud\r\n");
 
     while (1) {
-        /* Sample the IR sensor */
+        /* Sample all 6 IR sensors */
         snapshot_sample(&snap);
 
-        /* Visual feedback: red LED = obstacle detected */
-        if (snap.ir_obstacle == 0) {
+        /* Visual feedback: red LED = any obstacle detected */
+        if (snapshot_any_obstacle(&snap)) {
             RGB_RED_ON();
         } else {
             RGB_RED_OFF();
@@ -144,7 +148,8 @@ int main(void)
             PRINTF(" seq=");
             debug_putdec(seq);
             PRINTF(" ir=");
-            debug_putdec(snap.ir_obstacle);
+            for (uint8_t i = 0; i < IR_OBS_COUNT; i++)
+                debug_putchar(snap.ir_obs[i] ? '1' : '0');
             PRINTF("\r\n");
         }
 
