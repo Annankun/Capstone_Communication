@@ -75,18 +75,21 @@
 
 ```
 common/
+  pin_config.h          ← shared pins (RGB LED, UART2)
+  pin_config_tx.h       ← TX / sensor board pins (IR sensor)
+  pin_config_rx.h       ← RX / control board pins (ESTOP button)
   ringbuf.h / ringbuf.c
   protocol.h / protocol.c
 
 sensor_board/
   sensor_sample.h / sensor_sample.c
   sensor_tx.h / sensor_tx.c
-  main.c
+  main.c                ← includes pin_config_tx.h
 
 control_board/
   control_rx.h / control_rx.c
   motor_ctrl.h / motor_ctrl.c
-  main.c
+  main.c                ← includes pin_config_rx.h
 ```
 
 ## Pin Assignments (FRDM-KL25Z)
@@ -99,18 +102,7 @@ control_board/
 | Green  | PTB19    | GPIO      |
 | Blue   | PTD1     | GPIO      |
 
-### IR Obstacle Sensor (MH-sensor, LM393)
-
-| Signal | Port/Pin | Function       |
-|--------|----------|----------------|
-| VOUT   | PTB2     | GPIO input     |
-| VCC    | 3.3V     | Power          |
-| GND    | GND      | Ground         |
-
-- Output: LOW = obstacle detected, HIGH = path clear
-- Digital output via LM393 comparator (no ADC needed)
-
-### UART2 Serial (board-to-board)
+### UART2 Serial (board-to-board) — shared
 
 | Signal | Port/Pin | ALT Mux |
 |--------|----------|---------|
@@ -119,6 +111,27 @@ control_board/
 
 - Baud rate: 9600
 - Configuration defined in `common/pin_config.h`
+
+### TX (Sensor Board) Pins — `common/pin_config_tx.h`
+
+| Signal | Port/Pin | Function       |
+|--------|----------|----------------|
+| IR VOUT| PTB2     | GPIO input     |
+| VCC    | 3.3V     | Power          |
+| GND    | GND      | Ground         |
+
+- IR Obstacle Sensor (MH-sensor, LM393)
+- Output: LOW = obstacle detected, HIGH = path clear
+- Digital output via LM393 comparator (no ADC needed)
+
+### RX (Control Board) Pins — `common/pin_config_rx.h`
+
+| Signal | Port/Pin | Function       |
+|--------|----------|----------------|
+| ESTOP  | PTB3     | GPIO input     |
+
+- Emergency stop button (active-low, internal pull-up)
+- Press = LOW, Release = HIGH
 
 ## Key Principles
 
