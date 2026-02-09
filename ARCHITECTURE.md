@@ -114,15 +114,23 @@ control_board/
 
 ### TX (Sensor Board) Pins — `common/pin_config_tx.h`
 
-| Signal | Port/Pin | Function       |
-|--------|----------|----------------|
-| IR VOUT| PTB2     | GPIO input     |
-| VCC    | 3.3V     | Power          |
-| GND    | GND      | Ground         |
+6 x MH Infrared Obstacle Sensors (LM393, digital out):
 
-- IR Obstacle Sensor (MH-sensor, LM393)
+| Sensor | Port/Pin | Function       |
+|--------|----------|----------------|
+| IR 0   | PTB2     | GPIO input     |
+| IR 1   | PTC0     | GPIO input     |
+| IR 2   | PTC3     | GPIO input     |
+| IR 3   | PTC4     | GPIO input     |
+| IR 4   | PTC5     | GPIO input     |
+| IR 5   | PTC6     | GPIO input     |
+| VCC    | 3.3V     | Power (shared) |
+| GND    | GND      | Ground (shared)|
+
+- All sensors: MH-sensor (LM393 comparator, digital output)
 - Output: LOW = obstacle detected, HIGH = path clear
-- Digital output via LM393 comparator (no ADC needed)
+- No ADC needed — digital output only
+- Snapshot payload: 6 bytes (one per sensor, indexed 0-5)
 
 ### RX (Control Board) Pins — `common/pin_config_rx.h`
 

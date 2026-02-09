@@ -49,7 +49,7 @@
 static inline void pin_config_init(void)
 {
     /* Enable clock gating for Port B and Port D */
-    SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTD_MASK;
+    SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTC_MASK | SIM_SCGC5_PORTD_MASK;
 
     /* --- RGB LED pins: GPIO output --- */
     RGB_RED_PORT->PCR[RGB_RED_PIN]   = PORT_PCR_MUX(1);
