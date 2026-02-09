@@ -32,10 +32,21 @@ static inline void debug_uart_init(void)
     /* Disable TX/RX while configuring */
     UART0->C2 = 0;
 
-    /* Baud rate */
-    sbr = (uint16_t)(DEBUG_CLOCK_HZ / (16u * DEBUG_BAUD_RATE));
+    /*
+     * Baud rate with adjusted oversampling ratio (OSR).
+     *
+     * Default 16x oversampling gives SBR = 20971520/(16*115200) = 11.38
+     * which truncates to 11, yielding 3.4% baud error (too high).
+     *
+     * Using OSR = 13 (register value 12):
+     *   SBR = 20971520 / (13 * 115200) = 14.003 → 14
+     *   Actual baud = 20971520 / (13 * 14) = 115228 Hz → 0.024% error
+     */
+    #define DEBUG_OSR  13u
+    sbr = (uint16_t)(DEBUG_CLOCK_HZ / (DEBUG_OSR * DEBUG_BAUD_RATE));
     UART0->BDH = (uint8_t)((sbr >> 8) & 0x1F);
     UART0->BDL = (uint8_t)(sbr & 0xFF);
+    UART0->C4  = (UART0->C4 & ~0x1Fu) | (uint8_t)(DEBUG_OSR - 1u);
 
     /* 8-N-1, no parity */
     UART0->C1 = 0;
