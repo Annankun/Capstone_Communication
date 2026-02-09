@@ -41,6 +41,9 @@
 
 #define COMM_BAUD_RATE  9600
 
+/* ---- IR Obstacle Sensor count (shared between TX and RX) ---- */
+#define IR_OBS_COUNT    6u
+
 /*
  * Shared pin init — call once from main() before using UART or RGB.
  * Board-specific init (pin_config_tx_init / pin_config_rx_init) should
@@ -48,8 +51,9 @@
  */
 static inline void pin_config_init(void)
 {
-    /* Enable clock gating for Port B and Port D */
-    SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTD_MASK;
+    /* Enable clock gating for Port B, Port D, and Port E */
+    SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTD_MASK
+                | SIM_SCGC5_PORTE_MASK;
 
     /* --- RGB LED pins: GPIO output --- */
     RGB_RED_PORT->PCR[RGB_RED_PIN]   = PORT_PCR_MUX(1);

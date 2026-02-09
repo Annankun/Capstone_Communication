@@ -1,9 +1,9 @@
 /*
- * Control Board - Step 4: Real snapshot payload + Emergency Stop
+ * Control Board - Step 5: 6x IR Obstacle Sensors + Emergency Stop
  *
  * UART2 RX interrupt pushes bytes into a ring buffer.
  * Main loop drains ring buffer into parser, unpacks validated frames
- * into a snapshot_t struct containing real sensor data.
+ * into a snapshot_t struct containing 6 real IR sensor readings.
  *
  * Emergency stop sources:
  *   1. ESTOP frame from sensor board (payload[0] = 1/0)
@@ -19,7 +19,7 @@
  *
  * LED feedback:
  *   - Green flash:  valid frame received
- *   - Red (steady): obstacle detected by IR sensor
+ *   - Red (steady): any obstacle detected by IR sensors
  *   - Blue:         safe mode (timeout) or emergency stop
  *
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
@@ -116,8 +116,10 @@ int main(void)
     #define  BTN_DEBOUNCE_MS 50u
 
     snapshot_t latest_snapshot;
-    latest_snapshot.ir_obstacle = 1;  /* default: clear (no obstacle) */
-    latest_snapshot.reserved    = 0;
+    for (uint8_t i = 0; i < IR_OBS_COUNT; i++)
+        latest_snapshot.ir_obs[i] = 1;   /* default: clear (no obstacle) */
+    latest_snapshot.reserved[0] = 0;
+    latest_snapshot.reserved[1] = 0;
 
     parser_t parser;
 
@@ -140,7 +142,7 @@ int main(void)
         delay_ms(150);
     }
 
-    PRINTF("[CONTROL] Step 4: Receiving real sensor snapshots.\r\n");
+    PRINTF("[CONTROL] Step 5: Receiving 6x IR sensor snapshots.\r\n");
     PRINTF("[CONTROL] UART2 RX on PTD2, TX on PTD3, 9600 baud\r\n");
 
     while (1) {
@@ -225,10 +227,10 @@ int main(void)
 
                     /* Show obstacle status on red LED (not during estop) */
                     if (!in_estop) {
-                        if (latest_snapshot.ir_obstacle == 0) {
+                        if (snapshot_any_obstacle(&latest_snapshot)) {
                             RGB_RED_ON();    /* obstacle detected */
                         } else {
-                            RGB_RED_OFF();   /* path clear */
+                            RGB_RED_OFF();   /* all clear */
                         }
                     }
 
@@ -263,7 +265,8 @@ int main(void)
             PRINTF(" seq_err=");
             debug_putdec(seq_errors);
             PRINTF(" ir=");
-            debug_putdec(latest_snapshot.ir_obstacle);
+            for (uint8_t i = 0; i < IR_OBS_COUNT; i++)
+                debug_putchar(latest_snapshot.ir_obs[i] ? '1' : '0');
             PRINTF(" overflow=");
             debug_putdec(rx_overflow_count);
             PRINTF(" hw_overrun=");
