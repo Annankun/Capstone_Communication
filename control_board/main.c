@@ -26,7 +26,7 @@
  */
 
 #include "MKL25Z4.h"
-#include "pin_config.h"
+#include "pin_config_rx.h"
 #include "uart.h"
 #include "debug_uart.h"
 #include "ringbuf.h"
@@ -118,6 +118,7 @@ int main(void)
     SysTick_Config(SystemCoreClock / 1000u);
 
     pin_config_init();
+    pin_config_rx_init();
     uart2_init();       /* enables RX ISR + ring buffer */
     debug_uart_init();
 
