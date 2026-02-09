@@ -68,6 +68,13 @@ void SysTick_Handler(void)
     ms_ticks++;
 }
 
+static void delay_ms(uint32_t ms)
+{
+    uint32_t start = ms_ticks;
+    while ((ms_ticks - start) < ms)
+        ;
+}
+
 /* ---- Decimal print helper ---- */
 
 static void debug_putdec(uint32_t n)
@@ -125,7 +132,16 @@ int main(void)
     RGB_ALL_OFF();
     parser_init(&parser);
 
+    /* Startup blink: 3x blue to confirm board is alive */
+    for (int blink = 0; blink < 3; blink++) {
+        RGB_BLUE_ON();
+        delay_ms(150);
+        RGB_BLUE_OFF();
+        delay_ms(150);
+    }
+
     PRINTF("[CONTROL] Step 4: Receiving real sensor snapshots.\r\n");
+    PRINTF("[CONTROL] UART2 RX on PTD2, TX on PTD3, 9600 baud\r\n");
 
     while (1) {
         uint8_t c;

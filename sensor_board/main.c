@@ -27,6 +27,18 @@
 ringbuf_t           rx_ring;
 volatile uint32_t   rx_overflow_count;
 
+/* ---- UART2 RX ISR (must exist even on TX board: uart2_init enables RIE) ---- */
+
+void UART2_IRQHandler(void)
+{
+    uint8_t status = COMM_UART->S1;
+
+    /* Read data register to clear RDRF (and OR if set) — just discard */
+    if (status & (UART_S1_RDRF_MASK | UART_S1_OR_MASK)) {
+        (void)COMM_UART->D;
+    }
+}
+
 /* ---- Simple delay using SysTick ---- */
 
 static volatile uint32_t ms_ticks;
@@ -86,7 +98,16 @@ int main(void)
 
     RGB_ALL_OFF();
 
+    /* Startup blink: 3x green to confirm board is alive */
+    for (int blink = 0; blink < 3; blink++) {
+        RGB_GREEN_ON();
+        delay_ms(150);
+        RGB_GREEN_OFF();
+        delay_ms(150);
+    }
+
     PRINTF("[SENSOR] Step 4: IR sensor transmit.\r\n");
+    PRINTF("[SENSOR] UART2 TX on PTD3, RX on PTD2, 9600 baud\r\n");
 
     while (1) {
         /* Sample the IR sensor */
