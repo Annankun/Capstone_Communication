@@ -16,14 +16,14 @@
  *   Printed every send cycle so TX values are always visible.
  *
  * Sensor drivers included:
- *   IR (6x):        ir_obs_read_all()  via pin_config_tx.h
- *   Ultrasonic (4): stub — replace with real driver when hardware ready
- *   ToF (1):        stub — replace with real driver when hardware ready
- *   GPS:            stub — replace with real driver when hardware ready
+ *   IR (6x):        ir_sensor_init() / ir_sensor_read()  via ir_sensor.h
+ *   Ultrasonic (4): stub — see ir_sensor.h for template
+ *   ToF (1):        stub — see ir_sensor.h for template
+ *   GPS:            stub — see ir_sensor.h for template
  */
 
 #include "MKL25Z4.h"
-#include "pin_config_tx.h"   /* ir_obs_read_all(), pin_config_tx_init() */
+#include "ir_sensor.h"       /* ir_sensor_init(), ir_sensor_read() */
 #include "uart.h"
 #include "debug_uart.h"
 #include "ringbuf.h"
@@ -122,7 +122,7 @@ static void gps_read(uint8_t *valid, int32_t *lat_deg7, int32_t *lon_deg7)
 
 static void sensors_init_all(void)
 {
-    pin_config_tx_init();   /* IR: configure 6 GPIO input pins */
+    ir_sensor_init();   /* IR: configure 6 GPIO input pins */
     ultrasonic_init();
     tof_init();
     gps_init();
@@ -136,7 +136,7 @@ static void sensors_init_all(void)
 
 static void update_sensor_status(void)
 {
-    ir_obs_read_all(g_sensor_status.ir_obs);
+    ir_sensor_read(g_sensor_status.ir_obs);
     ultrasonic_read(g_sensor_status.us_obs);
     tof_read(&g_sensor_status.tof_obstacle);
     gps_read(&g_sensor_status.gps_valid,
