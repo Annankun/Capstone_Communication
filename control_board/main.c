@@ -139,6 +139,7 @@ int main(void)
     snapshot_t snap;
     parser_t   parser;
     uint8_t    c;
+    uint8_t    debug_ctr  = 0;
 
     uint32_t last_valid_rx = 0;
     uint8_t  first_frame   = 1;
@@ -233,7 +234,11 @@ int main(void)
                     if (parser.type == FRAME_TYPE_SENSOR &&
                         parser.len  == SNAPSHOT_PAYLOAD_BYTES) {
                         snapshot_unpack(&snap, parser.payload);
-                        debug_print_rx(&snap);  /* print actual received values */
+                        /* Print every 10 frames */
+                        if (++debug_ctr >= 10) {
+                            debug_ctr = 0;
+                            debug_print_rx(&snap);
+                        }
                     }
 
                     /* Exit safe mode on valid frame */

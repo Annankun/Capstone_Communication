@@ -211,7 +211,8 @@ static void debug_print_tx(const snapshot_t *s)
 
 int main(void)
 {
-    uint8_t    seq = 0;
+    uint8_t    seq        = 0;
+    uint8_t    debug_ctr  = 0;
     snapshot_t snap;
     uint8_t    payload[SNAPSHOT_PAYLOAD_BYTES];
     uint8_t    frame_buf[FRAME_HEADER_SIZE + SNAPSHOT_PAYLOAD_BYTES + FRAME_CRC_SIZE];
@@ -262,8 +263,11 @@ int main(void)
         RGB_GREEN_ON();  delay_ms(10);
         RGB_GREEN_OFF();
 
-        /* 6. Debug: print what we just sent */
-        debug_print_tx(&snap);
+        /* 6. Debug: print what we just sent (every 10 frames) */
+        if (++debug_ctr >= 10) {
+            debug_ctr = 0;
+            debug_print_tx(&snap);
+        }
 
         /* 7. Wait for next cycle (100 ms total period) */
         delay_ms(90);
