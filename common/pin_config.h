@@ -9,7 +9,7 @@
  *   - UART2 board-to-board communication
  *
  * Board-specific pins live in:
- *   pin_config_tx.h  — sensor board (e.g. IR obstacle sensor)
+ *   ir_sensor.h      — sensor board IR obstacle sensor driver
  *   pin_config_rx.h  — control board (e.g. emergency stop button)
  */
 
@@ -46,7 +46,7 @@
 
 /*
  * Shared pin init — call once from main() before using UART or RGB.
- * Board-specific init (pin_config_tx_init / pin_config_rx_init) should
+ * Board-specific init (ir_sensor_init / pin_config_rx_init) should
  * be called afterwards.
  */
 static inline void pin_config_init(void)
