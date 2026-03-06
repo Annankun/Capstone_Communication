@@ -76,15 +76,15 @@
 ```
 common/
   pin_config.h          ← shared pins (RGB LED, UART2)
-  pin_config_tx.h       ← TX / sensor board pins (IR sensor)
   pin_config_rx.h       ← RX / control board pins (ESTOP button)
   ringbuf.h / ringbuf.c
   protocol.h / protocol.c
 
 sensor_board/
+  ir_sensor.h           ← IR obstacle sensor driver (init + read)
   sensor_sample.h / sensor_sample.c
   sensor_tx.h / sensor_tx.c
-  main.c                ← includes pin_config_tx.h
+  main.c                ← includes ir_sensor.h
 
 control_board/
   control_rx.h / control_rx.c
@@ -112,7 +112,7 @@ control_board/
 - Baud rate: 9600
 - Configuration defined in `common/pin_config.h`
 
-### TX (Sensor Board) Pins — `common/pin_config_tx.h`
+### TX (Sensor Board) Pins — `sensor_board/ir_sensor.h`
 
 | Signal | Port/Pin | Function       |
 |--------|----------|----------------|
