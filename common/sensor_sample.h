@@ -5,18 +5,6 @@
 #include "sensor_status.h"
 
 /*
- * sensor_sample.h — Pure Snapshot Layer
- *
- * Responsibilities:
- *   1. Define snapshot_t (the wire format sent over UART)
- *   2. snapshot_sample()  — copy current g_sensor_status into a snapshot
- *   3. snapshot_pack()    — serialize snapshot_t to byte buffer for framing
- *   4. snapshot_unpack()  — deserialize byte buffer back into snapshot_t
- *   5. snapshot_any_obstacle() — check if any sensor reports an obstacle
- *
- * This layer does NOT call any sensor drivers directly.
- * Hardware reading is done by update_sensor_status() in sensor_board/main.c.
- *
  * Payload wire layout (SNAPSHOT_PAYLOAD_BYTES = 20 bytes):
  *   [0..5]   ir_obs[6]       — one byte per IR sensor (0/1)
  *   [6..9]   us_obs[4]       — one byte per ultrasonic sensor (0/1)
@@ -37,11 +25,7 @@ typedef struct {
     int32_t  lon_deg7;           /* longitude * 1e7 */
 } snapshot_t;
 
-/*
- * Copy current g_sensor_status into a snapshot.
- * Call from main loop AFTER update_sensor_status().
- * Does NOT read any hardware.
- */
+/* Copy g_sensor_status into snapshot (does not read hardware). */
 static inline void snapshot_sample(snapshot_t *s)
 {
     uint8_t i;
@@ -55,41 +39,32 @@ static inline void snapshot_sample(snapshot_t *s)
     s->lon_deg7     = g_sensor_status.lon_deg7;
 }
 
-/*
- * Serialize snapshot_t to byte buffer for framing.
- * buf must be at least SNAPSHOT_PAYLOAD_BYTES bytes.
- * int32_t fields are packed big-endian.
- */
+/* Serialize snapshot to byte buffer; int32_t fields packed big-endian. */
 static inline void snapshot_pack(const snapshot_t *s, uint8_t *buf)
 {
     uint8_t i;
 
     for (i = 0; i < IR_COUNT; i++)
-        buf[i] = s->ir_obs[i];                             /* [0..5]  */
+        buf[i] = s->ir_obs[i];
 
     for (i = 0; i < US_COUNT; i++)
-        buf[6 + i] = s->us_obs[i];                        /* [6..9]  */
+        buf[6 + i] = s->us_obs[i];
 
-    buf[10] = s->tof_obstacle;                             /* [10]    */
-    buf[11] = s->gps_valid;                                /* [11]    */
+    buf[10] = s->tof_obstacle;
+    buf[11] = s->gps_valid;
 
-    /* lat_deg7 big-endian */
-    buf[12] = (uint8_t)((uint32_t)s->lat_deg7 >> 24);     /* [12..15] */
+    buf[12] = (uint8_t)((uint32_t)s->lat_deg7 >> 24);
     buf[13] = (uint8_t)((uint32_t)s->lat_deg7 >> 16);
     buf[14] = (uint8_t)((uint32_t)s->lat_deg7 >>  8);
     buf[15] = (uint8_t)((uint32_t)s->lat_deg7       );
 
-    /* lon_deg7 big-endian */
-    buf[16] = (uint8_t)((uint32_t)s->lon_deg7 >> 24);     /* [16..19] */
+    buf[16] = (uint8_t)((uint32_t)s->lon_deg7 >> 24);
     buf[17] = (uint8_t)((uint32_t)s->lon_deg7 >> 16);
     buf[18] = (uint8_t)((uint32_t)s->lon_deg7 >>  8);
     buf[19] = (uint8_t)((uint32_t)s->lon_deg7       );
 }
 
-/*
- * Deserialize byte buffer back into snapshot_t.
- * buf must be at least SNAPSHOT_PAYLOAD_BYTES bytes.
- */
+/* Deserialize byte buffer into snapshot. */
 static inline void snapshot_unpack(snapshot_t *s, const uint8_t *buf)
 {
     uint8_t i;
@@ -116,9 +91,7 @@ static inline void snapshot_unpack(snapshot_t *s, const uint8_t *buf)
         ((uint32_t)buf[19]      ));
 }
 
-/*
- * Returns 1 if ANY sensor reports an obstacle (value = 0).
- */
+/* Returns 1 if any sensor reports an obstacle (value = 0). */
 static inline uint8_t snapshot_any_obstacle(const snapshot_t *s)
 {
     uint8_t i;
