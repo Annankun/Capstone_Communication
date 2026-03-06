@@ -179,17 +179,6 @@ int main(void)
                     last_valid_rx = ms_ticks;
                     first_frame   = 0;
 
-                    if (parser.type == FRAME_TYPE_ESTOP && parser.len >= 1) {
-                        in_estop = (parser.payload[0] != 0) ? 1 : 0;
-                        if (in_estop) {
-                            RGB_ALL_OFF(); RGB_BLUE_ON();
-                            PRINTF("[CONTROL] ESTOP (remote) ACTIVATED\r\n");
-                        } else {
-                            RGB_BLUE_OFF();
-                            PRINTF("[CONTROL] ESTOP (remote) RELEASED\r\n");
-                        }
-                    }
-
                     if (parser.type == FRAME_TYPE_SENSOR &&
                         parser.len  == SNAPSHOT_PAYLOAD_BYTES) {
                         snapshot_unpack(&snap, parser.payload);
