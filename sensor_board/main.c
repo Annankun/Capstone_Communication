@@ -1,20 +1,21 @@
 /*
- * Sensor Board - Step 5: 6x IR Obstacle Sensors
+ * Sensor Board - Read sensor_status and transmit every 100ms
  *
- * Reads 6 MH Infrared Obstacle Sensors (LM393) every 100ms,
- * packs the readings into a snapshot struct, frames with CRC16,
+ * Reads g_sensor_status (maintained by classmates) every 100ms,
+ * packs the full status struct into a framed packet with CRC16,
  * and transmits via UART2 to the control board.
  *
- * Sensor pins (all polled via GPIO PDIR):
- *   [0] PTE3   [1] PTE2   [2] PTB11
- *   [3] PTB10  [4] PTB9   [5] PTB8
- *
- * IR sensor output:
- *   LOW  (0) = obstacle detected
- *   HIGH (1) = path clear
+ * Sensor status payload (22 bytes):
+ *   ir[6]           0 = obstacle, 1 = clear
+ *   ultrasonic[4]   0 = danger,   1 = safe
+ *   tof             0 = danger,   1 = safe
+ *   gps_valid       0 = no fix,   1 = fix
+ *   gps_lat         int32_t latitude
+ *   gps_lon         int32_t longitude
+ *   padding[2]
  *
  * Green LED flash on each send cycle.
- * Red LED on when any obstacle detected (visual feedback on sensor board).
+ * Red LED on when any obstacle/danger detected (visual feedback).
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
  */
 
@@ -24,7 +25,11 @@
 #include "debug_uart.h"
 #include "ringbuf.h"
 #include "protocol.h"
-#include "sensor_sample.h"
+#include "sensor_status.h"
+
+/* ---- Global sensor status (classmates write, we read) ---- */
+
+sensor_status_t g_sensor_status;
 
 /* ---- Globals needed by uart.h (TX-only, but extern symbols must exist) ---- */
 
@@ -85,11 +90,10 @@ int main(void)
 {
     uint32_t   send_count = 0;
     uint8_t    seq = 0;
-    snapshot_t snap;
 
-    /* Frame buffer: big enough for sensor frames */
-    uint8_t frame_buf[FRAME_HEADER_SIZE + SNAPSHOT_SIZE + FRAME_CRC_SIZE];
-    uint8_t payload[SNAPSHOT_SIZE];
+    /* Frame buffer: header + sensor status payload + CRC */
+    uint8_t frame_buf[FRAME_HEADER_SIZE + SENSOR_STATUS_SIZE + FRAME_CRC_SIZE];
+    uint8_t payload[SENSOR_STATUS_SIZE];
 
     /* Core clock, SysTick fires every 1 ms */
     SystemCoreClockUpdate();
@@ -110,24 +114,24 @@ int main(void)
         delay_ms(150);
     }
 
-    PRINTF("[SENSOR] Step 5: 6x IR obstacle sensors.\r\n");
+    PRINTF("[SENSOR] sensor_status TX: 22-byte payload every 100ms\r\n");
     PRINTF("[SENSOR] UART2 TX on PTD3, RX on PTD2, 9600 baud\r\n");
 
     while (1) {
-        /* Sample all 6 IR sensors */
-        snapshot_sample(&snap);
+        /* Read latest sensor status (classmates maintain g_sensor_status) */
+        sensor_status_t snap = g_sensor_status;
 
-        /* Visual feedback: red LED = any obstacle detected */
-        if (snapshot_any_obstacle(&snap)) {
+        /* Visual feedback: red LED = any obstacle or danger */
+        if (sensor_status_any_obstacle(&snap)) {
             RGB_RED_ON();
         } else {
             RGB_RED_OFF();
         }
 
         /* Serialize and pack into frame */
-        snapshot_pack(&snap, payload);
+        sensor_status_pack(&snap, payload);
         uint8_t frame_len = frame_pack(frame_buf, FRAME_TYPE_SENSOR, seq,
-                                        payload, SNAPSHOT_SIZE);
+                                        payload, SENSOR_STATUS_SIZE);
 
         /* Transmit frame byte by byte */
         for (uint8_t i = 0; i < frame_len; i++)
@@ -148,8 +152,15 @@ int main(void)
             PRINTF(" seq=");
             debug_putdec(seq);
             PRINTF(" ir=");
-            for (uint8_t i = 0; i < IR_OBS_COUNT; i++)
-                debug_putchar(snap.ir_obs[i] ? '1' : '0');
+            for (uint8_t i = 0; i < 6u; i++)
+                debug_putchar(snap.ir[i] ? '1' : '0');
+            PRINTF(" us=");
+            for (uint8_t i = 0; i < 4u; i++)
+                debug_putchar(snap.ultrasonic[i] ? '1' : '0');
+            PRINTF(" tof=");
+            debug_putchar(snap.tof ? '1' : '0');
+            PRINTF(" gps=");
+            debug_putchar(snap.gps_valid ? '1' : '0');
             PRINTF("\r\n");
         }
 
