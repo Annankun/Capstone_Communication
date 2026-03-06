@@ -1,9 +1,10 @@
 /*
- * Control Board - Step 5: 6x IR Obstacle Sensors + Emergency Stop
+ * Control Board - Receive sensor_status frames and drive motor outputs
  *
  * UART2 RX interrupt pushes bytes into a ring buffer.
  * Main loop drains ring buffer into parser, unpacks validated frames
- * into a snapshot_t struct containing 6 real IR sensor readings.
+ * into a sensor_status_t struct (22-byte payload):
+ *   ir[6], ultrasonic[4], tof, gps_valid, gps_lat, gps_lon, padding[2]
  *
  * Emergency stop sources:
  *   1. ESTOP frame from sensor board (payload[0] = 1/0)
@@ -19,7 +20,7 @@
  *
  * LED feedback:
  *   - Green flash:  valid frame received
- *   - Red (steady): any obstacle detected by IR sensors
+ *   - Red (steady): any obstacle/danger detected
  *   - Blue:         safe mode (timeout) or emergency stop
  *
  * Debug output via UART0 (OpenSDA virtual COM) at 115200 baud.
@@ -31,7 +32,7 @@
 #include "debug_uart.h"
 #include "ringbuf.h"
 #include "protocol.h"
-#include "sensor_sample.h"
+#include "../sensor_board/sensor_status.h"
 
 /* ---- Global ring buffer and overflow counter (used by uart.h) ---- */
 
@@ -115,11 +116,17 @@ int main(void)
     uint32_t btn_debounce  = 0;   /* timestamp of last edge */
     #define  BTN_DEBOUNCE_MS 50u
 
-    snapshot_t latest_snapshot;
-    for (uint8_t i = 0; i < IR_OBS_COUNT; i++)
-        latest_snapshot.ir_obs[i] = 1;   /* default: clear (no obstacle) */
-    latest_snapshot.reserved[0] = 0;
-    latest_snapshot.reserved[1] = 0;
+    /* Latest sensor status — default all sensors clear/safe */
+    sensor_status_t latest_status;
+    uint8_t i;
+    for (i = 0; i < 6u; i++)  latest_status.ir[i]         = 1;
+    for (i = 0; i < 4u; i++)  latest_status.ultrasonic[i] = 1;
+    latest_status.tof        = 1;
+    latest_status.gps_valid  = 0;
+    latest_status.gps_lat    = 0;
+    latest_status.gps_lon    = 0;
+    latest_status.padding[0] = 0;
+    latest_status.padding[1] = 0;
 
     parser_t parser;
 
@@ -142,7 +149,7 @@ int main(void)
         delay_ms(150);
     }
 
-    PRINTF("[CONTROL] Step 5: Receiving 6x IR sensor snapshots.\r\n");
+    PRINTF("[CONTROL] sensor_status RX: 22-byte payload\r\n");
     PRINTF("[CONTROL] UART2 RX on PTD2, TX on PTD3, 9600 baud\r\n");
 
     while (1) {
@@ -212,10 +219,10 @@ int main(void)
                         }
                     }
 
-                    /* Unpack snapshot if sensor frame with correct size */
+                    /* Unpack full sensor status if correct type and size */
                     if (parser.type == FRAME_TYPE_SENSOR &&
-                        parser.len == SNAPSHOT_SIZE) {
-                        snapshot_unpack(&latest_snapshot, parser.payload);
+                        parser.len == SENSOR_STATUS_SIZE) {
+                        sensor_status_unpack(&latest_status, parser.payload);
                     }
 
                     /* Exit safe mode if we were in it */
@@ -225,12 +232,12 @@ int main(void)
                             RGB_BLUE_OFF();
                     }
 
-                    /* Show obstacle status on red LED (not during estop) */
+                    /* Red LED = any obstacle/danger (not during estop) */
                     if (!in_estop) {
-                        if (snapshot_any_obstacle(&latest_snapshot)) {
-                            RGB_RED_ON();    /* obstacle detected */
+                        if (sensor_status_any_obstacle(&latest_status)) {
+                            RGB_RED_ON();
                         } else {
-                            RGB_RED_OFF();   /* all clear */
+                            RGB_RED_OFF();
                         }
                     }
 
@@ -265,8 +272,15 @@ int main(void)
             PRINTF(" seq_err=");
             debug_putdec(seq_errors);
             PRINTF(" ir=");
-            for (uint8_t i = 0; i < IR_OBS_COUNT; i++)
-                debug_putchar(latest_snapshot.ir_obs[i] ? '1' : '0');
+            for (i = 0; i < 6u; i++)
+                debug_putchar(latest_status.ir[i] ? '1' : '0');
+            PRINTF(" us=");
+            for (i = 0; i < 4u; i++)
+                debug_putchar(latest_status.ultrasonic[i] ? '1' : '0');
+            PRINTF(" tof=");
+            debug_putchar(latest_status.tof ? '1' : '0');
+            PRINTF(" gps=");
+            debug_putchar(latest_status.gps_valid ? '1' : '0');
             PRINTF(" overflow=");
             debug_putdec(rx_overflow_count);
             PRINTF(" hw_overrun=");
