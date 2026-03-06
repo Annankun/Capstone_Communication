@@ -23,6 +23,7 @@
 #define FRAME_MAX_PAYLOAD   255u
 #define FRAME_TYPE_SENSOR   0x01u
 #define FRAME_TYPE_ESTOP    0x02u   /* Emergency stop: payload[0] = 1 stop, 0 resume */
+#define FRAME_TYPE_MOTOR    0x03u   /* Motor command:  8-byte motor_cmd_t payload     */
 
 /* ---- CRC16-CCITT (polynomial 0x1021, init 0xFFFF) ---- */
 
