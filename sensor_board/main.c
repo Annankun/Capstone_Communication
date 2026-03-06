@@ -78,22 +78,42 @@ static void ultrasonic_init(void)
     GPIOC->PDDR &= ~(1u << US_ECHO_PIN);
 }
 
+/*
+ * Debounce: require US_DEBOUNCE_COUNT consecutive raw readings in the same
+ * direction before committing a state change.  This eliminates the
+ * frame-to-frame oscillation seen when an object sits near the threshold
+ * or when the echo pulse has marginal amplitude.
+ */
+#define US_DEBOUNCE_COUNT 3u
+
 static void ultrasonic_read(uint8_t obs[US_COUNT])
 {
     uint32_t t0, echo_us;
+    uint8_t  raw;
 
     /* only sensor 0 is real; mark the rest clear */
     obs[1] = obs[2] = obs[3] = 1;
 
-    /* trigger: pull high >10 us then low */
+    /*
+     * Debounce state persists across calls.
+     * obs0_state: last committed (debounced) value for sensor 0.
+     * obs0_count: number of consecutive raw readings matching 'raw_pending'.
+     * raw_pending: the candidate new state being accumulated.
+     */
+    static uint8_t obs0_state   = 1u; /* start clear */
+    static uint8_t raw_pending  = 1u;
+    static uint8_t obs0_count   = 0u;
+
+    /* trigger: pull high for ≥10 µs then low */
     GPIOC->PSOR = (1u << US_TRIG_PIN);
-    for (volatile uint32_t d = 0; d < 200; d++); /* ~10 us at 21 MHz */
+    t0 = time_us();
+    while ((time_us() - t0) < 12u); /* 12 µs — guaranteed regardless of clock */
     GPIOC->PCOR = (1u << US_TRIG_PIN);
 
-    /* wait for ECHO to go high, 30 ms timeout */
+    /* wait for ECHO to go high, 30 ms timeout → treat as clear */
     t0 = time_us();
     while (!(GPIOC->PDIR & (1u << US_ECHO_PIN))) {
-        if ((time_us() - t0) > 30000u) { obs[0] = 1; return; } /* no echo */
+        if ((time_us() - t0) > 30000u) { raw = 1u; goto debounce; }
     }
 
     /* measure how long ECHO stays high */
@@ -103,8 +123,22 @@ static void ultrasonic_read(uint8_t obs[US_COUNT])
     }
     echo_us = time_us() - t0;
 
-    /* distance = echo_us / 58 cm; below threshold = obstacle */
-    obs[0] = (echo_us < US_THRESHOLD_US) ? 0u : 1u;
+    /* distance = echo_us / 58 cm; below threshold = obstacle (0), else clear (1) */
+    raw = (echo_us < US_THRESHOLD_US) ? 0u : 1u;
+
+debounce:
+    if (raw == raw_pending) {
+        if (obs0_count < US_DEBOUNCE_COUNT)
+            obs0_count++;
+        if (obs0_count >= US_DEBOUNCE_COUNT)
+            obs0_state = raw; /* commit only after N consistent readings */
+    } else {
+        /* direction changed — restart counter with the new candidate */
+        raw_pending = raw;
+        obs0_count  = 1u;
+    }
+
+    obs[0] = obs0_state;
 }
 
 static void tof_init(void) { /* TODO */ }
