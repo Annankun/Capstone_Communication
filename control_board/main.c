@@ -2,10 +2,9 @@
  * Control Board — RX
  *
  * Main loop:
- *   1. Check local ESTOP button (PTB3, debounced)
- *   2. Drain ring buffer → parser_feed()
- *   3. On PARSE_OK: snapshot_unpack() → motor control decision
- *   4. Timeout fail-safe: 500 ms without valid frame → safe mode
+ *   1. Drain ring buffer → parser_feed()
+ *   2. On PARSE_OK: snapshot_unpack() → motor control decision
+ *   3. Timeout fail-safe: 500 ms without valid frame → safe mode
  *
  * LED: green flash = valid frame, red = obstacle, blue = ESTOP/safe mode
  * Debug (UART0, 115200): prints received values every 10 frames.
@@ -109,10 +108,6 @@ int main(void)
     uint8_t  in_safe_mode  = 0;
     uint8_t  in_estop      = 0;
 
-    uint8_t  btn_last     = 1;
-    uint32_t btn_debounce = 0;
-    #define  BTN_DEBOUNCE_MS  50u
-
     /* Default snapshot: all clear */
     uint8_t i;
     for (i = 0; i < IR_COUNT; i++) snap.ir_obs[i] = 1;
@@ -143,28 +138,7 @@ int main(void)
 
     while (1) {
 
-        /* ---- 1. ESTOP button (PTB3): toggle on press ---- */
-        {
-            uint8_t btn_now = ESTOP_BTN_READ();
-            if (btn_now != btn_last &&
-                (ms_ticks - btn_debounce) >= BTN_DEBOUNCE_MS) {
-                btn_debounce = ms_ticks;
-                btn_last     = btn_now;
-
-                if (btn_now == 0) {   /* falling edge = pressed */
-                    in_estop = !in_estop;
-                    if (in_estop) {
-                        RGB_ALL_OFF(); RGB_BLUE_ON();
-                        PRINTF("[CONTROL] ESTOP ACTIVATED\r\n");
-                    } else {
-                        RGB_BLUE_OFF();
-                        PRINTF("[CONTROL] ESTOP RELEASED\r\n");
-                    }
-                }
-            }
-        }
-
-        /* ---- 2. Process incoming bytes ---- */
+        /* ---- 1. Process incoming bytes ---- */
         if (in_estop) {
             /* Flush ring and reset parser so we start clean on resume */
             while (uart2_getchar(&c))
@@ -219,7 +193,7 @@ int main(void)
             RGB_GREEN_OFF();
         }
 
-        /* ---- 3. Timeout fail-safe: 500 ms without valid frame ---- */
+        /* ---- 2. Timeout fail-safe: 500 ms without valid frame ---- */
         if (!first_frame && !in_safe_mode && !in_estop &&
             (ms_ticks - last_valid_rx) >= 500u) {
             in_safe_mode = 1;
