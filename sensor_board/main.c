@@ -10,6 +10,9 @@
 
 #include "MKL25Z4.h"
 #include "ir_sensor.h"
+#include "../source/ultrasonic.h"
+#include "../source/timers.h"
+#include "../source/servo.h"
 #include "uart.h"
 #include "debug_uart.h"
 #include "ringbuf.h"
@@ -42,17 +45,6 @@ static void delay_ms(uint32_t ms)
     while ((ms_ticks - start) < ms)
         ;
 }
-
-/* ---- extern declarations: teammate drivers ---- */
-extern void     Ultrasonic_InitAll(void);
-extern uint32_t Ultrasonic_MeasureCm_Left(void);
-extern uint32_t Ultrasonic_MeasureCm_Right(void);
-extern uint32_t Ultrasonic_MeasureCm_Back(void);
-extern void     Init_PIT0_10us(void);
-extern void     Start_PIT0(void);
-extern void     Servo_Init(void);
-extern void     Servo1_SetAngle(uint8_t angle);
-extern void     Servo2_SetAngle(uint8_t angle);
 
 #define US_THRESHOLD_CM   10u               /* obstacle if closer than this */
 
