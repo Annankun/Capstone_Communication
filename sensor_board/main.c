@@ -43,69 +43,18 @@ static void delay_ms(uint32_t ms)
         ;
 }
 
-/* ====================================================================
- * Sensor driver stubs — replace bodies with real driver calls
- * ==================================================================== */
+/* ---- extern declarations: teammate drivers ---- */
+extern void     Ultrasonic_InitAll(void);
+extern uint32_t Ultrasonic_MeasureCm_Left(void);
+extern uint32_t Ultrasonic_MeasureCm_Right(void);
+extern uint32_t Ultrasonic_MeasureCm_Back(void);
+extern void     Init_PIT0_10us(void);
+extern void     Start_PIT0(void);
+extern void     Servo_Init(void);
+extern void     Servo1_SetAngle(uint8_t angle);
+extern void     Servo2_SetAngle(uint8_t angle);
 
-/* HC-SR04: TRIG = PTC0 (output), ECHO = PTC4 (input) */
-#define US_TRIG_PIN       0u
-#define US_ECHO_PIN       4u
-#define US_THRESHOLD_CM   30u               /* obstacle if closer than this */
-#define US_THRESHOLD_US   (US_THRESHOLD_CM * 58u)  /* 1740 us for 30 cm */
-
-/* microsecond timestamp using ms_ticks + SysTick->VAL */
-static uint32_t time_us(void)
-{
-    uint32_t ms, val;
-    do {
-        ms  = ms_ticks;
-        val = SysTick->VAL;   /* counts DOWN */
-    } while (ms != ms_ticks); /* retry if SysTick fired between reads */
-    return ms * 1000u + (SysTick->LOAD + 1u - val) / (SystemCoreClock / 1000000u);
-}
-
-static void ultrasonic_init(void)
-{
-    SIM->SCGC5 |= SIM_SCGC5_PORTC_MASK;
-
-    /* TRIG: output, idle low */
-    PORTC->PCR[US_TRIG_PIN] = PORT_PCR_MUX(1);
-    GPIOC->PDDR |=  (1u << US_TRIG_PIN);
-    GPIOC->PCOR  =  (1u << US_TRIG_PIN);
-
-    /* ECHO: input */
-    PORTC->PCR[US_ECHO_PIN] = PORT_PCR_MUX(1);
-    GPIOC->PDDR &= ~(1u << US_ECHO_PIN);
-}
-
-static void ultrasonic_read(uint8_t obs[US_COUNT])
-{
-    uint32_t t0, echo_us;
-
-    /* only sensor 0 is real; mark the rest clear */
-    obs[1] = obs[2] = obs[3] = 1;
-
-    /* trigger: pull high >10 us then low */
-    GPIOC->PSOR = (1u << US_TRIG_PIN);
-    for (volatile uint32_t d = 0; d < 200; d++); /* ~10 us at 21 MHz */
-    GPIOC->PCOR = (1u << US_TRIG_PIN);
-
-    /* wait for ECHO to go high, 30 ms timeout */
-    t0 = time_us();
-    while (!(GPIOC->PDIR & (1u << US_ECHO_PIN))) {
-        if ((time_us() - t0) > 30000u) { obs[0] = 1; return; } /* no echo */
-    }
-
-    /* measure how long ECHO stays high */
-    t0 = time_us();
-    while (GPIOC->PDIR & (1u << US_ECHO_PIN)) {
-        if ((time_us() - t0) > 25000u) break; /* >4 m, treat as clear */
-    }
-    echo_us = time_us() - t0;
-
-    /* distance = echo_us / 58 cm; below threshold = obstacle */
-    obs[0] = (echo_us < US_THRESHOLD_US) ? 0u : 1u;
-}
+#define US_THRESHOLD_CM   10u               /* obstacle if closer than this */
 
 static void tof_init(void) { /* TODO */ }
 
@@ -132,15 +81,26 @@ static void gps_read(uint8_t *valid, int32_t *lat_deg7, int32_t *lon_deg7)
 static void sensors_init_all(void)
 {
     ir_sensor_init();
-    ultrasonic_init();
+    Ultrasonic_InitAll();
+    Servo_Init();
     tof_init();
     gps_init();
 }
 
 static void update_sensor_status(void)
 {
+    uint32_t cm;
+
     ir_sensor_read(g_sensor_status.ir_obs);
-    ultrasonic_read(g_sensor_status.us_obs);
+
+    cm = Ultrasonic_MeasureCm_Left();
+    g_sensor_status.us_obs[0] = (cm > 0u && cm < US_THRESHOLD_CM) ? 0u : 1u;
+    cm = Ultrasonic_MeasureCm_Right();
+    g_sensor_status.us_obs[1] = (cm > 0u && cm < US_THRESHOLD_CM) ? 0u : 1u;
+    cm = Ultrasonic_MeasureCm_Back();
+    g_sensor_status.us_obs[2] = (cm > 0u && cm < US_THRESHOLD_CM) ? 0u : 1u;
+    g_sensor_status.us_obs[3] = 1u;  /* no 4th sensor */
+
     tof_read(&g_sensor_status.tof_obstacle);
     gps_read(&g_sensor_status.gps_valid,
              &g_sensor_status.lat_deg7,
@@ -199,6 +159,10 @@ int main(void)
     uint8_t    payload[SNAPSHOT_PAYLOAD_BYTES];
     uint8_t    frame_buf[FRAME_HEADER_SIZE + SNAPSHOT_PAYLOAD_BYTES + FRAME_CRC_SIZE];
 
+    /* Servo scan state */
+    static uint8_t s_angle = 0;
+    static uint8_t s_dir   = 1;   /* 1=increasing, 0=decreasing */
+
     SystemCoreClockUpdate();
     SysTick_Config(SystemCoreClock / 1000u);
 
@@ -250,7 +214,18 @@ int main(void)
             debug_print_tx(&snap);
         }
 
-        /* 7. Wait for next cycle */
-        delay_ms(90);
+        /* 7. Servo scan */
+        Servo1_SetAngle(s_angle);
+        Servo2_SetAngle(180u - s_angle);
+        if (s_dir) {
+            if (s_angle < 150u) s_angle += 15u;
+            else s_dir = 0;
+        } else {
+            if (s_angle > 15u) s_angle -= 15u;
+            else s_dir = 1;
+        }
+
+        /* 8. Wait for next cycle */
+        delay_ms(75);
     }
 }

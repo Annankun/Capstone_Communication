@@ -1,4 +1,3 @@
-#include "timers.h"
 #include "MKL25Z4.h"
 
 // global variable counting # of 10 us ticks
