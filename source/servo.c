@@ -1,4 +1,3 @@
-#include "servo.h"
 #include "MKL25Z4.h"
 
 /*

@@ -1,5 +1,38 @@
-#include "ultrasonic.h"
-#include "timers.h"
+#include "MKL25Z4.h"
+
+extern void     Init_PIT0_10us(void); /* from timers.c */
+extern void     Start_PIT0(void);     /* from timers.c */
+extern unsigned Timer_Micros(void);   /* from timers.c */
+
+/* S3 BACK:  PTD0 (TRIG), PTD1 (ECHO) */
+#define US3_TRIG_GPIO   GPIOD
+#define US3_TRIG_PORT   PORTD
+#define US3_TRIG_PIN    0u
+#define US3_TRIG_MASK   (1u << US3_TRIG_PIN)
+#define US3_ECHO_GPIO   GPIOD
+#define US3_ECHO_PORT   PORTD
+#define US3_ECHO_PIN    1u
+#define US3_ECHO_MASK   (1u << US3_ECHO_PIN)
+
+/* S1 LEFT:  PTD6 (TRIG), PTD7 (ECHO) — moved from PTD2/PTD3 (UART2 conflict) */
+#define US1_TRIG_GPIO   GPIOD
+#define US1_TRIG_PORT   PORTD
+#define US1_TRIG_PIN    6u
+#define US1_TRIG_MASK   (1u << US1_TRIG_PIN)
+#define US1_ECHO_GPIO   GPIOD
+#define US1_ECHO_PORT   PORTD
+#define US1_ECHO_PIN    7u
+#define US1_ECHO_MASK   (1u << US1_ECHO_PIN)
+
+/* S2 RIGHT: PTD4 (TRIG), PTD5 (ECHO) */
+#define US2_TRIG_GPIO   GPIOD
+#define US2_TRIG_PORT   PORTD
+#define US2_TRIG_PIN    4u
+#define US2_TRIG_MASK   (1u << US2_TRIG_PIN)
+#define US2_ECHO_GPIO   GPIOD
+#define US2_ECHO_PORT   PORTD
+#define US2_ECHO_PIN    5u
+#define US2_ECHO_MASK   (1u << US2_ECHO_PIN)
 
 static void delay_cycles(volatile uint32_t n)
 {
@@ -60,7 +93,7 @@ static uint32_t MeasureUs_Single(GPIO_Type *trigGPIO,
     trigGPIO->PCOR = trigMask;
 
     while (!g_got_rise) {
-        if ((Timer_Micros() - start_us) > 30000u) {
+        if ((Timer_Micros() - start_us) > 5000u) {
             g_active_echoMask = 0;
             return 0u;
         }
@@ -68,7 +101,7 @@ static uint32_t MeasureUs_Single(GPIO_Type *trigGPIO,
     }
 
     while (!g_done) {
-        if ((Timer_Micros() - start_us) > 60000u) {
+        if ((Timer_Micros() - start_us) > 5000u) {
             g_active_echoMask = 0;
             return 0u;
         }
@@ -92,7 +125,7 @@ void Ultrasonic_InitAll(void)
     US3_ECHO_PORT->PCR[US3_ECHO_PIN] = PORT_PCR_MUX(1) | PORT_PCR_IRQC(0xB);
     US3_ECHO_GPIO->PDDR &= ~US3_ECHO_MASK;
 
-    /* S1 LEFT: PTD2/PTD3 */
+    /* S1 LEFT: PTD6/PTD7 */
     US1_TRIG_PORT->PCR[US1_TRIG_PIN] = PORT_PCR_MUX(1);
     US1_TRIG_GPIO->PDDR |= US1_TRIG_MASK;
     US1_ECHO_PORT->PCR[US1_ECHO_PIN] = PORT_PCR_MUX(1) | PORT_PCR_IRQC(0xB);
